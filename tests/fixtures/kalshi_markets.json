@@ -1,0 +1,29 @@
+{
+  "markets": [
+    {
+      "ticker": "KXMLSSOC-25JUN21-MCI",
+      "event_ticker": "KXMLSSOC-25JUN21",
+      "series_ticker": "KXMLSSOC",
+      "title": "Man City to win vs Arsenal",
+      "category": "sports",
+      "status": "open",
+      "close_time": "2025-06-21T20:00:00Z",
+      "yes_sub_title": "Man City wins",
+      "no_sub_title": "Arsenal wins or Draw",
+      "tags": ["soccer", "premier-league"]
+    },
+    {
+      "ticker": "KXMLSNBA-25JUN21-LAL",
+      "event_ticker": "KXMLSNBA-25JUN21",
+      "series_ticker": "KXMLSNBA",
+      "title": "Lakers to win vs Warriors",
+      "category": "sports",
+      "status": "open",
+      "close_time": "2025-06-21T22:30:00Z",
+      "yes_sub_title": "Lakers win",
+      "no_sub_title": "Warriors win",
+      "tags": ["basketball", "nba"]
+    }
+  ],
+  "cursor": null
+}

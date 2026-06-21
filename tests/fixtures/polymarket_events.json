@@ -1,0 +1,40 @@
+[
+  {
+    "id": "poly-event-001",
+    "title": "Manchester City vs Arsenal",
+    "slug": "man-city-vs-arsenal-jun-21",
+    "endDate": "2025-06-21T20:00:00Z",
+    "active": true,
+    "closed": false,
+    "tags": [{"label": "Soccer"}, {"label": "Premier League"}],
+    "markets": [
+      {
+        "id": "poly-market-001",
+        "question": "Will Manchester City win?",
+        "conditionId": "0xabc123def456000000000000000000000000000000000000000000000000001",
+        "clobTokenIds": ["111111111", "222222222"],
+        "active": true,
+        "closed": false
+      }
+    ]
+  },
+  {
+    "id": "poly-event-002",
+    "title": "LA Lakers vs Golden State Warriors",
+    "slug": "lakers-vs-warriors-jun-21",
+    "endDate": "2025-06-21T22:30:00Z",
+    "active": true,
+    "closed": false,
+    "tags": [{"label": "Basketball"}, {"label": "NBA"}],
+    "markets": [
+      {
+        "id": "poly-market-002",
+        "question": "Will the Lakers win?",
+        "conditionId": "0xdef456abc123000000000000000000000000000000000000000000000000002",
+        "clobTokenIds": ["333333333", "444444444"],
+        "active": true,
+        "closed": false
+      }
+    ]
+  }
+]

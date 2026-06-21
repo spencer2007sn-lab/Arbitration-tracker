@@ -1,0 +1,11 @@
+# Manual cross-venue market overrides.
+# These take highest priority — matched before any fuzzy logic.
+# Format: list of {kalshi: <ticker>, polymarket: <conditionId>, note: <optional>}
+#
+# Example:
+#   overrides:
+#     - kalshi: "KXMLSSOC-24JAN10-MCI"
+#       polymarket: "0xabc123def456..."
+#       note: "Man City vs Arsenal verified"
+
+overrides: []

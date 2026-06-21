@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prediction Market Arb Scanner</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a1d27;
+      border-bottom: 1px solid #2a2d3a;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    header h1 {
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: #a0c4ff;
+      text-transform: uppercase;
+    }
+
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 0.8rem;
+      color: #888;
+      margin-left: auto;
+    }
+
+    #live-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #4caf50;
+      box-shadow: 0 0 6px #4caf50;
+      display: inline-block;
+    }
+
+    #live-dot.stale { background: #f44336; box-shadow: 0 0 6px #f44336; }
+    #live-dot.waiting { background: #ff9800; box-shadow: 0 0 6px #ff9800; }
+
+    .banner {
+      padding: 10px 20px;
+      font-size: 0.85rem;
+      display: none;
+    }
+    .banner.error { background: #3b1a1a; color: #ff6b6b; border-bottom: 1px solid #5a2020; display: block; }
+    .banner.stale { background: #3b2f10; color: #ffb74d; border-bottom: 1px solid #5a4210; display: block; }
+
+    .summary {
+      padding: 10px 20px;
+      font-size: 0.82rem;
+      color: #666;
+      border-bottom: 1px solid #2a2d3a;
+    }
+
+    .filters {
+      padding: 8px 20px;
+      border-bottom: 1px solid #2a2d3a;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: 0.82rem;
+    }
+
+    .filters label { color: #888; }
+    .filters select, .filters input {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      color: #e0e0e0;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.82rem;
+    }
+
+    .table-wrap { overflow-x: auto; padding: 16px 20px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    th {
+      background: #1a1d27;
+      color: #888;
+      text-align: left;
+      padding: 8px 12px;
+      border-bottom: 2px solid #2a2d3a;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    th:hover { color: #a0c4ff; }
+    th.sort-asc::after { content: ' ↑'; color: #a0c4ff; }
+    th.sort-desc::after { content: ' ↓'; color: #a0c4ff; }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #1e212e;
+      vertical-align: top;
+    }
+
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .row-high td { background: rgba(76, 175, 80, 0.08); }
+    .row-high:hover td { background: rgba(76, 175, 80, 0.12); }
+
+    .row-med td { background: rgba(255, 193, 7, 0.06); }
+    .row-med:hover td { background: rgba(255, 193, 7, 0.10); }
+
+    .row-low td { background: rgba(244, 67, 54, 0.06); }
+    .row-low:hover td { background: rgba(244, 67, 54, 0.10); }
+
+    .market-name { font-weight: 500; color: #ccc; }
+    .market-sub { font-size: 0.77rem; color: #666; margin-top: 2px; }
+
+    .venue-tag {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+    .venue-kalshi { background: #1a3a5c; color: #7ec8e3; }
+    .venue-polymarket { background: #1a3a2a; color: #7ae3a0; }
+
+    .price { font-family: monospace; font-size: 0.9rem; }
+    .edge-high { color: #4caf50; font-weight: 600; }
+    .edge-med  { color: #ffc107; font-weight: 600; }
+    .edge-low  { color: #f44336; font-weight: 600; }
+
+    .warn-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      background: #3b2f10;
+      color: #ffb74d;
+      border-radius: 3px;
+      font-size: 0.72rem;
+      margin-left: 4px;
+      cursor: help;
+    }
+
+    .liq { color: #888; font-size: 0.8rem; }
+    .age { color: #555; font-size: 0.78rem; font-family: monospace; }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #444;
+    }
+
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .empty-state p { font-size: 0.9rem; }
+
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid #333;
+      border-top-color: #a0c4ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    footer {
+      padding: 16px 20px;
+      font-size: 0.75rem;
+      color: #444;
+      border-top: 1px solid #1e212e;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Prediction Market Arb Scanner</h1>
+  <div id="status-bar">
+    <span id="opp-count">—</span>
+    <span>|</span>
+    <span id="scan-age">waiting…</span>
+    <span>|</span>
+    <span>next in <b id="countdown">—</b>s</span>
+    <span id="live-dot" class="waiting"></span>
+  </div>
+</header>
+
+<div id="error-banner" class="banner error" style="display:none;"></div>
+<div id="stale-banner" class="banner stale" style="display:none;">
+  ⚠ Data may be stale — last scan older than expected.
+</div>
+
+<div class="summary" id="summary">Initialising scanner…</div>
+
+<div class="filters">
+  <label>Min edge %:
+    <input type="number" id="filter-edge" value="0" min="0" step="0.1" style="width:70px" />
+  </label>
+  <label>Sport:
+    <select id="filter-sport">
+      <option value="">All sports</option>
+    </select>
+  </label>
+  <label>Venue:
+    <select id="filter-venue">
+      <option value="">Both venues</option>
+      <option value="kalshi">Kalshi only</option>
+      <option value="polymarket">Polymarket only</option>
+    </select>
+  </label>
+</div>
+
+<div class="table-wrap">
+  <table id="results-table">
+    <thead>
+      <tr>
+        <th data-col="market">Market / Outcome</th>
+        <th data-col="direction">Direction</th>
+        <th data-col="yes_ask">YES Ask</th>
+        <th data-col="no_ask">NO Ask</th>
+        <th data-col="net_cost">Net Cost</th>
+        <th data-col="edge_pct" class="sort-desc">Edge %</th>
+        <th data-col="net_profit_per_100">Profit / $100</th>
+        <th data-col="max_contracts">Liquidity</th>
+        <th data-col="scanned_at">Age</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <tr>
+        <td colspan="9">
+          <div class="empty-state">
+            <div><span class="spinner"></span> Connecting to scanner…</div>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<footer>
+  Prediction Market Arb Scanner — Data from Kalshi and Polymarket. Not financial advice.
+  Verify resolution criteria before trading. Polymarket not available to US persons.
+</footer>
+
+<script>
+  const REFRESH_MS = 20000;
+  let countdown = REFRESH_MS / 1000;
+  let lastData = null;
+  let sortCol = 'edge_pct';
+  let sortAsc = false;
+
+  // --- Utilities ---
+  function fmt(v, decimals = 2) {
+    return parseFloat(v).toFixed(decimals);
+  }
+
+  function fmtCents(v) {
+    return (parseFloat(v) * 100).toFixed(1) + '¢';
+  }
+
+  function fmtAge(isoStr) {
+    const diffMs = Date.now() - new Date(isoStr).getTime();
+    const s = Math.round(diffMs / 1000);
+    if (s < 60) return s + 's ago';
+    const m = Math.floor(s / 60), rs = s % 60;
+    return `${m}:${String(rs).padStart(2,'0')} ago`;
+  }
+
+  function venueTag(v) {
+    const cls = v === 'kalshi' ? 'venue-kalshi' : 'venue-polymarket';
+    const label = v === 'kalshi' ? 'KAL' : 'POLY';
+    return `<span class="venue-tag ${cls}">${label}</span>`;
+  }
+
+  function edgeClass(e) {
+    const pct = parseFloat(e);
+    if (pct >= 3) return 'edge-high';
+    if (pct >= 1) return 'edge-med';
+    return 'edge-low';
+  }
+
+  function rowClass(e) {
+    const pct = parseFloat(e);
+    if (pct >= 3) return 'row-high';
+    if (pct >= 1) return 'row-med';
+    return 'row-low';
+  }
+
+  // --- Filtering ---
+  function applyFilters(opps) {
+    const minEdge = parseFloat(document.getElementById('filter-edge').value) || 0;
+    const sportVal = document.getElementById('filter-sport').value.toLowerCase();
+    const venueVal = document.getElementById('filter-venue').value.toLowerCase();
+
+    return opps.filter(o => {
+      if (parseFloat(o.edge_pct) < minEdge) return false;
+      const sport = (o.pair?.kalshi_market?.sport || '').toLowerCase();
+      if (sportVal && sport !== sportVal) return false;
+      if (venueVal) {
+        if (venueVal === 'kalshi' && o.yes_venue !== 'kalshi' && o.no_venue !== 'kalshi') return false;
+        if (venueVal === 'polymarket' && o.yes_venue !== 'polymarket' && o.no_venue !== 'polymarket') return false;
+      }
+      return true;
+    });
+  }
+
+  function populateSportFilter(opps) {
+    const sports = [...new Set(opps.map(o => o.pair?.kalshi_market?.sport).filter(Boolean))].sort();
+    const sel = document.getElementById('filter-sport');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All sports</option>';
+    sports.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+      if (s === current) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  // --- Sorting ---
+  function sortOpps(opps) {
+    return [...opps].sort((a, b) => {
+      let va = a[sortCol], vb = b[sortCol];
+      if (sortCol === 'market') {
+        va = a.pair?.kalshi_market?.title || '';
+        vb = b.pair?.kalshi_market?.title || '';
+      }
+      if (sortCol === 'scanned_at') {
+        va = new Date(va).getTime();
+        vb = new Date(vb).getTime();
+      }
+      const num_va = parseFloat(va);
+      const num_vb = parseFloat(vb);
+      if (!isNaN(num_va) && !isNaN(num_vb)) {
+        return sortAsc ? num_va - num_vb : num_vb - num_va;
+      }
+      return sortAsc
+        ? String(va).localeCompare(String(vb))
+        : String(vb).localeCompare(String(va));
+    });
+  }
+
+  // --- Render ---
+  function render(opps) {
+    const filtered = applyFilters(opps);
+    const sorted = sortOpps(filtered);
+    const tbody = document.getElementById('table-body');
+
+    if (sorted.length === 0) {
+      tbody.innerHTML = `
+        <tr><td colspan="9">
+          <div class="empty-state">
+            <div class="icon">🔍</div>
+            <p>No arbitrage opportunities above your filters right now.</p>
+          </div>
+        </td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = sorted.map(o => {
+      const k = o.pair?.kalshi_market || {};
+      const p = o.pair?.polymarket_market || {};
+      const marketTitle = k.title || p.title || '—';
+      const sport = k.sport ? `<span style="color:#555;font-size:0.75rem">${k.sport}</span>` : '';
+      const warning = o.pair?.resolution_warning
+        ? `<span class="warn-badge" title="${escapeHtml(o.pair.resolution_warning)}">⚠ settlement</span>` : '';
+
+      const maxContracts = o.max_contracts
+        ? `${fmt(o.max_contracts, 0)} contracts` : '—';
+      const maxProfit = o.max_profit
+        ? ` ($${fmt(o.max_profit, 2)})` : '';
+
+      return `<tr class="${rowClass(o.edge_pct)}">
+        <td>
+          <div class="market-name">${escapeHtml(marketTitle)}${warning}</div>
+          <div class="market-sub">${sport}</div>
+        </td>
+        <td>
+          ${venueTag(o.yes_venue)} YES<br>
+          ${venueTag(o.no_venue)} NO
+        </td>
+        <td class="price">${fmtCents(o.yes_ask)}</td>
+        <td class="price">${fmtCents(o.no_ask)}</td>
+        <td class="price">${fmtCents(o.net_cost)}</td>
+        <td class="${edgeClass(o.edge_pct)}">${fmt(o.edge_pct, 2)}%</td>
+        <td class="${edgeClass(o.edge_pct)}">$${fmt(o.net_profit_per_100, 2)}</td>
+        <td class="liq">${maxContracts}${maxProfit}</td>
+        <td class="age">${fmtAge(o.scanned_at)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // --- Fetch & Update ---
+  async function refresh() {
+    const dot = document.getElementById('live-dot');
+    dot.className = 'waiting';
+
+    try {
+      const resp = await fetch('/opportunities');
+      if (!resp.ok) {
+        if (resp.status === 503) {
+          document.getElementById('summary').textContent = 'Scanner warming up…';
+          dot.className = 'waiting';
+        } else {
+          showError(`HTTP ${resp.status}: ${await resp.text()}`);
+          dot.className = 'stale';
+        }
+        return;
+      }
+
+      const data = await resp.json();
+      lastData = data;
+      hideError();
+
+      const scannedAt = new Date(data.scanned_at);
+      const ageMs = Date.now() - scannedAt.getTime();
+      const isStale = ageMs > REFRESH_MS * 2.5;
+
+      document.getElementById('stale-banner').style.display = isStale ? 'block' : 'none';
+      dot.className = isStale ? 'stale' : '';
+
+      const count = data.opportunities?.length || 0;
+      document.getElementById('opp-count').textContent =
+        `${count} opportunit${count === 1 ? 'y' : 'ies'}`;
+
+      document.getElementById('scan-age').textContent =
+        `scanned ${Math.round(ageMs / 1000)}s ago`;
+
+      document.getElementById('summary').textContent =
+        `${data.pairs_checked} pairs checked in ${Math.round(data.scan_duration_ms)}ms` +
+        (data.errors?.length ? ` · ⚠ ${data.errors.length} error(s)` : '');
+
+      if (data.opportunities) {
+        populateSportFilter(data.opportunities);
+        render(data.opportunities);
+      }
+
+    } catch (e) {
+      showError(`Network error: ${e.message}`);
+      dot.className = 'stale';
+    }
+  }
+
+  function showError(msg) {
+    const b = document.getElementById('error-banner');
+    b.textContent = '⚠ ' + msg;
+    b.style.display = 'block';
+  }
+
+  function hideError() {
+    document.getElementById('error-banner').style.display = 'none';
+  }
+
+  // --- Sort header clicks ---
+  document.querySelectorAll('th[data-col]').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortCol === col) {
+        sortAsc = !sortAsc;
+      } else {
+        sortCol = col;
+        sortAsc = col === 'market'; // text cols default ascending
+      }
+      document.querySelectorAll('th').forEach(h => h.classList.remove('sort-asc','sort-desc'));
+      th.classList.add(sortAsc ? 'sort-asc' : 'sort-desc');
+      if (lastData?.opportunities) render(lastData.opportunities);
+    });
+  });
+
+  // --- Filter changes re-render ---
+  ['filter-edge','filter-sport','filter-venue'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => {
+      if (lastData?.opportunities) render(lastData.opportunities);
+    });
+  });
+  document.getElementById('filter-edge').addEventListener('input', () => {
+    if (lastData?.opportunities) render(lastData.opportunities);
+  });
+
+  // --- Countdown and auto-refresh ---
+  const cdEl = document.getElementById('countdown');
+  setInterval(() => {
+    countdown--;
+    cdEl.textContent = Math.max(0, countdown);
+    if (countdown <= 0) {
+      countdown = REFRESH_MS / 1000;
+      refresh();
+    }
+  }, 1000);
+
+  // Initial load
+  refresh();
+</script>
+</body>
+</html>
