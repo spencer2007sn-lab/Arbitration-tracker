@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from arb_scanner import calculator
-from arb_scanner.config import build_config
+from arb_scanner.config import build_config, validate_kalshi_credentials
 from arb_scanner.fetchers.kalshi import KalshiFetcher
 from arb_scanner.fetchers.polymarket import PolymarketFetcher
 from arb_scanner.matcher import Matcher
@@ -152,6 +152,9 @@ async def lifespan(app: FastAPI):
         poly_fee_rate=_config.polymarket_sports_rate,
     )
 
+    for warning in validate_kalshi_credentials(_config):
+        log.warning("kalshi_credential_warning", msg=warning)
+
     _scanner_task = asyncio.create_task(scanner_loop(app_state, _config, _fetchers))
     log.info("scanner_started", interval=_config.refresh_interval)
 
@@ -190,6 +193,33 @@ async def get_opportunities():
 async def health():
     last_scan = app_state.result.scanned_at.isoformat() if app_state.result else None
     return {"status": "ok", "last_scan": last_scan}
+
+
+@app.get("/status")
+async def status():
+    kalshi_fetcher: KalshiFetcher | None = _fetchers.get("kalshi")
+    cfg = _config
+    result = app_state.result
+
+    kalshi_info: dict = {"enabled": cfg.kalshi_enabled if cfg else False}
+    if kalshi_fetcher:
+        kalshi_info["auth_ready"] = kalshi_fetcher.auth_ready
+        kalshi_info["pem_path"] = str(cfg.kalshi_private_key_path)
+        kalshi_info["pem_exists"] = cfg.kalshi_private_key_path.exists()
+        if cfg.kalshi_api_key:
+            kalshi_info["api_key_prefix"] = cfg.kalshi_api_key[:8] + "…"
+        else:
+            kalshi_info["api_key_prefix"] = None
+
+    return {
+        "kalshi": kalshi_info,
+        "polymarket": {
+            "enabled": cfg.polymarket_enabled if cfg else False,
+            "auth_required": False,
+        },
+        "last_scan": result.scanned_at.isoformat() if result else None,
+        "pairs_checked": result.pairs_checked if result else 0,
+    }
 
 
 if __name__ == "__main__":

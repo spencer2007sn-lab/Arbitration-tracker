@@ -72,6 +72,23 @@ class AppConfig:
         )
 
 
+def validate_kalshi_credentials(cfg: "AppConfig") -> list[str]:
+    """Return a list of warning strings about missing/invalid Kalshi credentials."""
+    warnings: list[str] = []
+    if not cfg.kalshi_enabled:
+        return []
+    if not cfg.kalshi_api_key:
+        warnings.append(
+            "KALSHI_API_KEY is not set in .env — Kalshi requests will be unauthenticated."
+        )
+    if not cfg.kalshi_private_key_path.exists():
+        warnings.append(
+            f"Kalshi PEM not found: '{cfg.kalshi_private_key_path}' — "
+            "run: uv run python scripts/generate_kalshi_key.py"
+        )
+    return warnings
+
+
 def build_config(
     yaml_path: Path = Path("config.yaml"),
     env_path: Optional[Path] = None,

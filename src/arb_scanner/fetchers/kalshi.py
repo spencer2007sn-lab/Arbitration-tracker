@@ -94,12 +94,41 @@ class KalshiFetcher(BaseFetcher):
         self._client = httpx.AsyncClient(timeout=15.0)
 
         self._private_key = None
-        if private_key_path.exists() and api_key:
-            pem = private_key_path.read_bytes()
-            self._private_key = serialization.load_pem_private_key(pem, password=None)
+        self._auth_ready = False
+        if not api_key:
+            log.warning(
+                "kalshi_no_api_key",
+                msg="KALSHI_API_KEY not set — requests will be unauthenticated. "
+                    "Set it in .env and run scripts/generate_kalshi_key.py.",
+            )
+        elif not private_key_path.exists():
+            log.warning(
+                "kalshi_pem_missing",
+                path=str(private_key_path),
+                msg=f"PEM file not found at '{private_key_path}' — requests will be unauthenticated. "
+                    "Run: uv run python scripts/generate_kalshi_key.py",
+            )
+        else:
+            try:
+                pem = private_key_path.read_bytes()
+                self._private_key = serialization.load_pem_private_key(pem, password=None)
+                self._auth_ready = True
+                log.info("kalshi_auth_ready", key_id=api_key[:8] + "…", pem=str(private_key_path))
+            except Exception as e:
+                log.error(
+                    "kalshi_pem_load_failed",
+                    path=str(private_key_path),
+                    error=str(e),
+                    msg="Could not load PEM — requests will be unauthenticated.",
+                )
+
+    @property
+    def auth_ready(self) -> bool:
+        return self._auth_ready
 
     def _auth_headers(self, method: str, path: str) -> dict[str, str]:
-        if not self._private_key or not self._api_key:
+        if not self._auth_ready:
+            log.debug("kalshi_request_unauthenticated", method=method, path=path)
             return {}
         ts, sig = _sign_request(self._private_key, method, path)
         return {
