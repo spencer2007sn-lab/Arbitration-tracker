@@ -474,6 +474,8 @@
 
       document.getElementById('summary').textContent =
         `${data.pairs_checked} pairs checked in ${Math.round(data.scan_duration_ms)}ms` +
+        (data.kalshi_markets != null ? ` · Kalshi: ${data.kalshi_markets}` : '') +
+        (data.polymarket_markets != null ? ` · Polymarket: ${data.polymarket_markets}` : '') +
         (data.errors?.length ? ` · ⚠ ${data.errors.length} error(s)` : '');
 
       const errBox = document.getElementById('scan-errors');

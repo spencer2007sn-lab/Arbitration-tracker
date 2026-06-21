@@ -77,5 +77,7 @@ class ScanResult(BaseModel):
     scanned_at: datetime
     opportunities: list[ArbOpportunity]
     pairs_checked: int
+    kalshi_markets: int = 0
+    polymarket_markets: int = 0
     scan_duration_ms: float
     errors: list[str]

@@ -87,6 +87,7 @@ async def _do_scan() -> ScanResult:
             else:
                 poly_markets = res
 
+        log.info("markets_fetched", kalshi=len(kalshi_markets), polymarket=len(poly_markets))
         pairs = matcher.match(kalshi_markets, poly_markets)
         pairs_checked = len(pairs)
 
@@ -122,6 +123,8 @@ async def _do_scan() -> ScanResult:
             scanned_at=datetime.now(timezone.utc),
             opportunities=opportunities,
             pairs_checked=pairs_checked,
+            kalshi_markets=len(kalshi_markets),
+            polymarket_markets=len(poly_markets),
             scan_duration_ms=(time.monotonic() - start) * 1000,
             errors=errors,
         )

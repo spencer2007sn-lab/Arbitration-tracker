@@ -87,11 +87,10 @@ class PolymarketFetcher(BaseFetcher):
 
     async def fetch_markets(self) -> list[NormalizedMarket]:
         cutoff = datetime.now(timezone.utc) + timedelta(hours=self._max_hours)
-        now = datetime.now(timezone.utc)
         markets: list[NormalizedMarket] = []
         offset = 0
         limit = 100
-        max_pages = 10  # Gamma API returns 422 beyond offset ~2100
+        max_pages = 5  # Gamma API returns 422 beyond offset ~2100; 500 events is plenty
 
         for _ in range(max_pages):
             params = {
@@ -100,8 +99,6 @@ class PolymarketFetcher(BaseFetcher):
                 "tag": "sports",
                 "limit": limit,
                 "offset": offset,
-                "end_date_min": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "end_date_max": cutoff.strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
             try:
                 r = await self._client.get(f"{self._gamma_url}/events", params=params)

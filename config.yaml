@@ -1,6 +1,6 @@
 refresh_interval_seconds: 20
 min_edge_pct: 0.5
-max_hours_to_close: 48
+max_hours_to_close: 168
 sport_filter: []            # [] = all sports; ["soccer", "basketball"] = filter
 
 venues:
