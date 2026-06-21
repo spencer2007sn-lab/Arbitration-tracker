@@ -14,6 +14,7 @@ from arb_scanner.models import MarketPair, NormalizedMarket, Venue
 log = structlog.get_logger()
 
 _ABBREV = [
+    (r"\bv\b", "versus"),
     (r"\bvs\.?\b", "versus"),
     (r"\bfc\b", "football club"),
     (r"\butd\b", "united"),
@@ -180,8 +181,8 @@ class Matcher:
             for p in partial_index[key]:
                 if p.market_id in matched_poly_ids:
                     continue
-                # Skip if both sides have team_b but they differ
-                if k.team_b and p.team_b and k.team_b != p.team_b:
+                # Skip if both sides have team_b but they differ significantly
+                if k.team_b and p.team_b and fuzz.partial_ratio(k.team_b, p.team_b) < 80:
                     continue
                 warning = _resolution_warning(k, p)
                 pairs.append(MarketPair(
@@ -224,8 +225,8 @@ class Matcher:
                 continue
             _matched_title, score, poly_id = result
             p = poly_by_id_remaining[poly_id]
-            # Block fuzzy pair when both sides have extracted team_b but they differ
-            if k.team_b and p.team_b and k.team_b != p.team_b:
+            # Block fuzzy pair when both sides have extracted team_b but they differ significantly
+            if k.team_b and p.team_b and fuzz.partial_ratio(k.team_b, p.team_b) < 80:
                 continue
             warning = _resolution_warning(k, p)
             pairs.append(MarketPair(
@@ -236,6 +237,7 @@ class Matcher:
                 resolution_warning=warning,
             ))
             matched_poly_ids.add(poly_id)
+            matched_kalshi_ids.add(k.market_id)
             # Remove from candidates to prevent double-matching
             del poly_titles[poly_id]
 
@@ -252,8 +254,8 @@ class Matcher:
                     continue
                 if k.sport and p.sport and k.sport != p.sport:
                     continue
-                # Block when both sides have different team_b (different opponents)
-                if k.team_b and p.team_b and k.team_b != p.team_b:
+                # Block when both sides have significantly different team_b (different opponents)
+                if k.team_b and p.team_b and fuzz.partial_ratio(k.team_b, p.team_b) < 80:
                     continue
                 # partial_ratio: "man city" scores 100% against "manchester city"
                 score_a = fuzz.partial_ratio(k.team_a, p.team_a)

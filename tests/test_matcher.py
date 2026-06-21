@@ -268,6 +268,56 @@ def test_team_fuzzy_match_abbreviation():
     assert pairs[0].match_method in ("exact", "partial_exact", "fuzzy", "team_fuzzy")
 
 
+# --- FC suffix handling ---
+
+def test_fuzzy_team_b_fc_suffix():
+    """team_b="arsenal" should fuzzy-match "arsenal football club" via partial_ratio."""
+    m = make_matcher()
+    k = NormalizedMarket(
+        venue=Venue.KALSHI, market_id="K1",
+        title="Man City to win vs Arsenal",
+        normalized_title=_normalize("Man City to win vs Arsenal"),
+        sport="soccer", outcome_type="moneyline",
+        close_time=_close(), team_a="manchester city", team_b="arsenal",
+    )
+    p = NormalizedMarket(
+        venue=Venue.POLYMARKET, market_id="P1",
+        title="Will Manchester City win?",
+        normalized_title=_normalize("Will Manchester City win?"),
+        sport="soccer", outcome_type="moneyline",
+        close_time=_close(), team_a="manchester city", team_b="arsenal football club",
+        token_id_yes="t1", token_id_no="t2",
+    )
+    pairs = m.match([k], [p])
+    assert len(pairs) == 1
+
+
+def test_partial_exact_fc_suffix():
+    """Pass 2b: Kalshi team_b="arsenal", Poly team_b="arsenal football club" → match."""
+    m = make_matcher()
+    k = _km("K1", sport="soccer", team_a="manchester city", team_b="arsenal")
+    p = NormalizedMarket(
+        venue=Venue.POLYMARKET, market_id="P1",
+        title="Will Manchester City win?",
+        normalized_title=_normalize("Will Manchester City win?"),
+        sport="soccer", outcome_type="moneyline",
+        close_time=_close(), team_a="manchester city", team_b="arsenal football club",
+        token_id_yes="t1", token_id_no="t2",
+    )
+    pairs = m.match([k], [p])
+    assert len(pairs) == 1
+
+
+def test_v_separator_team_extraction():
+    """'Arsenal v Chelsea' uses British 'v' separator — both teams should be extracted."""
+    from arb_scanner.fetchers.polymarket import _extract_teams
+    team_a, team_b = _extract_teams("Arsenal v Chelsea")
+    assert team_a is not None
+    assert team_b is not None
+    assert "arsenal" in team_a
+    assert "chelsea" in team_b
+
+
 # --- no double matching ---
 
 def test_poly_market_not_matched_twice():

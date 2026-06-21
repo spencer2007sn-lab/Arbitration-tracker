@@ -15,15 +15,20 @@ from arb_scanner.models import NormalizedMarket, OrderBook, Venue
 log = structlog.get_logger()
 
 _ABBREV = [
+    (r"\bv\b", "versus"),
     (r"\bvs\.?\b", "versus"),
     (r"\bfc\b", "football club"),
     (r"\butd\b", "united"),
     (r"\bman\b", "manchester"),
+    (r"\bla\b", "los angeles"),
+    (r"\bny\b", "new york"),
+    (r"\bkc\b", "kansas city"),
+    (r"\bsf\b", "san francisco"),
+    (r"\btb\b", "tampa bay"),
 ]
 
 SPORT_TAG_MAP = {
     "soccer": "soccer",
-    "football": "soccer",
     "basketball": "basketball",
     "nba": "basketball",
     "baseball": "baseball",
