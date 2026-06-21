@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     )
 
     kalshi_api_key: str = Field(default="", alias="KALSHI_API_KEY")
+    kalshi_private_key_content: str = Field(default="", alias="KALSHI_PRIVATE_KEY_CONTENT")
     kalshi_private_key_path: Path = Field(
         default=Path("kalshi_private.pem"),
         alias="KALSHI_PRIVATE_KEY_PATH",
@@ -34,6 +35,7 @@ class AppConfig:
 
     def __init__(self, settings: Settings, yaml_cfg: dict) -> None:
         self.kalshi_api_key: str = settings.kalshi_api_key
+        self.kalshi_private_key_content: str = settings.kalshi_private_key_content
         self.kalshi_private_key_path: Path = settings.kalshi_private_key_path
         self.log_level: str = settings.log_level
 
@@ -81,9 +83,10 @@ def validate_kalshi_credentials(cfg: "AppConfig") -> list[str]:
         warnings.append(
             "KALSHI_API_KEY is not set in .env — Kalshi requests will be unauthenticated."
         )
-    if not cfg.kalshi_private_key_path.exists():
+    if not cfg.kalshi_private_key_content and not cfg.kalshi_private_key_path.exists():
         warnings.append(
-            f"Kalshi PEM not found: '{cfg.kalshi_private_key_path}' — "
+            f"Kalshi PEM not found: set KALSHI_PRIVATE_KEY_CONTENT env var "
+            f"or place key at '{cfg.kalshi_private_key_path}' — "
             "run: uv run python scripts/generate_kalshi_key.py"
         )
     return warnings

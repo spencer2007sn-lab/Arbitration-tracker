@@ -86,6 +86,7 @@ class KalshiFetcher(BaseFetcher):
         base_url: str,
         max_hours_to_close: int = 48,
         sport_filter: list[str] | None = None,
+        private_key_content: str = "",
     ) -> None:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
@@ -98,29 +99,37 @@ class KalshiFetcher(BaseFetcher):
         if not api_key:
             log.warning(
                 "kalshi_no_api_key",
-                msg="KALSHI_API_KEY not set — requests will be unauthenticated. "
-                    "Set it in .env and run scripts/generate_kalshi_key.py.",
-            )
-        elif not private_key_path.exists():
-            log.warning(
-                "kalshi_pem_missing",
-                path=str(private_key_path),
-                msg=f"PEM file not found at '{private_key_path}' — requests will be unauthenticated. "
-                    "Run: uv run python scripts/generate_kalshi_key.py",
+                msg="KALSHI_API_KEY not set — requests will be unauthenticated.",
             )
         else:
-            try:
+            pem: bytes | None = None
+            source: str = ""
+            if private_key_content:
+                # Support both literal newlines and escaped \n (from env vars)
+                pem = private_key_content.replace("\\n", "\n").encode()
+                source = "env_var"
+            elif private_key_path.exists():
                 pem = private_key_path.read_bytes()
-                self._private_key = serialization.load_pem_private_key(pem, password=None)
-                self._auth_ready = True
-                log.info("kalshi_auth_ready", key_id=api_key[:8] + "…", pem=str(private_key_path))
-            except Exception as e:
-                log.error(
-                    "kalshi_pem_load_failed",
+                source = str(private_key_path)
+            else:
+                log.warning(
+                    "kalshi_pem_missing",
                     path=str(private_key_path),
-                    error=str(e),
-                    msg="Could not load PEM — requests will be unauthenticated.",
+                    msg="No PEM found (checked KALSHI_PRIVATE_KEY_CONTENT and file) — "
+                        "requests will be unauthenticated.",
                 )
+            if pem:
+                try:
+                    self._private_key = serialization.load_pem_private_key(pem, password=None)
+                    self._auth_ready = True
+                    log.info("kalshi_auth_ready", key_id=api_key[:8] + "…", source=source)
+                except Exception as e:
+                    log.error(
+                        "kalshi_pem_load_failed",
+                        source=source,
+                        error=str(e),
+                        msg="Could not parse PEM — requests will be unauthenticated.",
+                    )
 
     @property
     def auth_ready(self) -> bool:

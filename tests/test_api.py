@@ -7,14 +7,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from arb_scanner.main import app, app_state
+from arb_scanner.main import app
 from arb_scanner.models import (
     ArbOpportunity,
     MarketPair,
     ScanResult,
     Venue,
 )
-from tests.conftest import make_kalshi_market, make_order_book, make_poly_market
+from tests.conftest import make_kalshi_market, make_poly_market
 
 
 def make_scan_result(n_opps: int = 0) -> ScanResult:
@@ -53,10 +53,8 @@ def make_scan_result(n_opps: int = 0) -> ScanResult:
 
 @pytest.fixture
 def client():
-    # Use TestClient without starting the background scanner
-    with patch("arb_scanner.main.lifespan"):
-        with TestClient(app) as c:
-            yield c
+    with TestClient(app) as c:
+        yield c
 
 
 def test_health_endpoint_returns_200(client):
@@ -66,17 +64,10 @@ def test_health_endpoint_returns_200(client):
     assert data["status"] == "ok"
 
 
-def test_opportunities_503_before_first_scan(client):
-    # Ensure no result is set
-    app_state.result = None
-    resp = client.get("/opportunities")
-    assert resp.status_code == 503
-    assert "error" in resp.json()
-
-
 def test_opportunities_returns_scan_result(client):
-    app_state.result = make_scan_result(n_opps=1)
-    resp = client.get("/opportunities")
+    mock_result = make_scan_result(n_opps=1)
+    with patch("arb_scanner.main._do_scan", AsyncMock(return_value=mock_result)):
+        resp = client.get("/opportunities")
     assert resp.status_code == 200
     data = resp.json()
     assert "opportunities" in data
@@ -86,8 +77,9 @@ def test_opportunities_returns_scan_result(client):
 
 
 def test_opportunities_empty_when_no_arb(client):
-    app_state.result = make_scan_result(n_opps=0)
-    resp = client.get("/opportunities")
+    mock_result = make_scan_result(n_opps=0)
+    with patch("arb_scanner.main._do_scan", AsyncMock(return_value=mock_result)):
+        resp = client.get("/opportunities")
     assert resp.status_code == 200
     data = resp.json()
     assert data["opportunities"] == []
@@ -100,11 +92,21 @@ def test_dashboard_html_served(client):
 
 
 def test_opportunities_shape(client):
-    app_state.result = make_scan_result(n_opps=1)
-    resp = client.get("/opportunities")
+    mock_result = make_scan_result(n_opps=1)
+    with patch("arb_scanner.main._do_scan", AsyncMock(return_value=mock_result)):
+        resp = client.get("/opportunities")
     opp = resp.json()["opportunities"][0]
     required_keys = {
         "direction", "yes_venue", "no_venue", "yes_ask", "no_ask",
         "net_cost", "edge_pct", "net_profit_per_100", "scanned_at",
     }
     assert required_keys.issubset(opp.keys())
+
+
+def test_status_endpoint(client):
+    resp = client.get("/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "kalshi" in data
+    assert "polymarket" in data
+    assert data["mode"] == "on_demand"
