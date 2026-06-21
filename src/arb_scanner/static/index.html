@@ -200,7 +200,7 @@
     <span id="scan-age">waiting…</span>
     <span>|</span>
     <span>next in <b id="countdown">—</b>s</span>
-    <span id="live-dot" class="waiting"></span>
+    <span id="live-dot" class="waiting" title="Green: live data · Orange: fetching · Red: stale or error"></span>
   </div>
 </header>
 
@@ -270,15 +270,19 @@
 
   // --- Utilities ---
   function fmt(v, decimals = 2) {
-    return parseFloat(v).toFixed(decimals);
+    const n = parseFloat(v);
+    return isNaN(n) ? '—' : n.toFixed(decimals);
   }
 
   function fmtCents(v) {
+    if (v == null) return '—';
     return (parseFloat(v) * 100).toFixed(1) + '¢';
   }
 
   function fmtAge(isoStr) {
+    if (!isoStr) return '—';
     const diffMs = Date.now() - new Date(isoStr).getTime();
+    if (isNaN(diffMs)) return '—';
     const s = Math.round(diffMs / 1000);
     if (s < 60) return s + 's ago';
     const m = Math.floor(s / 60), rs = s % 60;
@@ -323,15 +327,24 @@
     });
   }
 
+  function formatSport(s) {
+    const acronyms = new Set(['nba','nfl','mlb','nhl','mls','ufc','atp','wta','pga']);
+    return s.split(' ')
+      .map(w => acronyms.has(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  }
+
   function populateSportFilter(opps) {
-    const sports = [...new Set(opps.map(o => o.pair?.kalshi_market?.sport).filter(Boolean))].sort();
+    const sports = [...new Set(
+      opps.map(o => o.pair?.kalshi_market?.sport || o.pair?.polymarket_market?.sport).filter(Boolean)
+    )].sort();
     const sel = document.getElementById('filter-sport');
     const current = sel.value;
     sel.innerHTML = '<option value="">All sports</option>';
     sports.forEach(s => {
       const opt = document.createElement('option');
       opt.value = s;
-      opt.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+      opt.textContent = formatSport(s);
       if (s === current) opt.selected = true;
       sel.appendChild(opt);
     });
@@ -381,7 +394,8 @@
       const k = o.pair?.kalshi_market || {};
       const p = o.pair?.polymarket_market || {};
       const marketTitle = k.title || p.title || '—';
-      const sport = k.sport ? `<span style="color:#555;font-size:0.75rem">${k.sport}</span>` : '';
+      const sportLabel = k.sport || p.sport;
+      const sport = sportLabel ? `<span style="color:#555;font-size:0.75rem">${formatSport(sportLabel)}</span>` : '';
       const warning = o.pair?.resolution_warning
         ? `<span class="warn-badge" title="${escapeHtml(o.pair.resolution_warning)}">⚠ settlement</span>` : '';
 
@@ -393,7 +407,7 @@
       return `<tr class="${rowClass(o.edge_pct)}">
         <td>
           <div class="market-name">${escapeHtml(marketTitle)}${warning}</div>
-          <div class="market-sub">${sport}</div>
+          ${sport ? `<div class="market-sub">${sport}</div>` : ''}
         </td>
         <td>
           ${venueTag(o.yes_venue)} YES<br>
@@ -420,6 +434,7 @@
 
   // --- Fetch & Update ---
   async function refresh() {
+    countdown = REFRESH_MS / 1000;
     const dot = document.getElementById('live-dot');
     dot.className = 'waiting';
 
