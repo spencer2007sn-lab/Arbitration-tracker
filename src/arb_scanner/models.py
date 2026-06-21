@@ -73,6 +73,19 @@ class ArbOpportunity(BaseModel):
         return self
 
 
+class TrackedPair(BaseModel):
+    """A matched pair with current prices — shown even when no arb exists."""
+    kalshi_title: str
+    poly_title: str
+    match_method: str
+    sport: Optional[str] = None
+    kalshi_yes_ask: Optional[Decimal] = None
+    kalshi_no_ask: Optional[Decimal] = None
+    poly_yes_ask: Optional[Decimal] = None
+    poly_no_ask: Optional[Decimal] = None
+    best_net_cost: Optional[Decimal] = None  # cheapest of the two directions
+
+
 class ScanResult(BaseModel):
     scanned_at: datetime
     opportunities: list[ArbOpportunity]
@@ -81,3 +94,4 @@ class ScanResult(BaseModel):
     polymarket_markets: int = 0
     scan_duration_ms: float
     errors: list[str]
+    tracked_pairs: list[TrackedPair] = []

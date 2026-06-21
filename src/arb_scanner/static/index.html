@@ -190,6 +190,38 @@
       border-top: 1px solid #1e212e;
       margin-top: 20px;
     }
+
+    .section-header {
+      padding: 10px 20px;
+      font-size: 0.78rem;
+      color: #666;
+      border-top: 1px solid #2a2d3a;
+      border-bottom: 1px solid #2a2d3a;
+      background: #13151f;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-header:hover { color: #999; }
+    .section-header .toggle-arrow { font-size: 0.7rem; transition: transform 0.2s; }
+    .section-header.collapsed .toggle-arrow { transform: rotate(-90deg); }
+
+    .watch-table td { padding: 7px 12px; font-size: 0.78rem; }
+    .watch-table th { font-size: 0.76rem; }
+    .net-cost-good { color: #4caf50; font-family: monospace; }
+    .net-cost-near { color: #ffc107; font-family: monospace; }
+    .net-cost-far  { color: #666;    font-family: monospace; }
+    .match-badge {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      background: #1e2232;
+      color: #666;
+    }
   </style>
 </head>
 <body>
@@ -257,6 +289,31 @@
       </tr>
     </tbody>
   </table>
+</div>
+
+<div id="watch-section" style="display:none;">
+  <div class="section-header" id="watch-toggle">
+    <span class="toggle-arrow">▼</span>
+    <span id="watch-label">Market Watch — matched pairs (no arb yet)</span>
+  </div>
+  <div id="watch-body" class="table-wrap" style="padding-top:0;">
+    <table class="watch-table" style="width:100%;border-collapse:collapse;font-size:0.78rem;">
+      <thead>
+        <tr>
+          <th style="background:#1a1d27;color:#888;text-align:left;padding:7px 12px;border-bottom:2px solid #2a2d3a;">Kalshi Market</th>
+          <th style="background:#1a1d27;color:#888;text-align:left;padding:7px 12px;border-bottom:2px solid #2a2d3a;">Polymarket Market</th>
+          <th style="background:#1a1d27;color:#888;text-align:left;padding:7px 12px;border-bottom:2px solid #2a2d3a;">Sport</th>
+          <th style="background:#1a1d27;color:#888;text-align:right;padding:7px 12px;border-bottom:2px solid #2a2d3a;">K YES</th>
+          <th style="background:#1a1d27;color:#888;text-align:right;padding:7px 12px;border-bottom:2px solid #2a2d3a;">P YES</th>
+          <th style="background:#1a1d27;color:#888;text-align:right;padding:7px 12px;border-bottom:2px solid #2a2d3a;">K NO</th>
+          <th style="background:#1a1d27;color:#888;text-align:right;padding:7px 12px;border-bottom:2px solid #2a2d3a;">P NO</th>
+          <th style="background:#1a1d27;color:#888;text-align:right;padding:7px 12px;border-bottom:2px solid #2a2d3a;">Best Net</th>
+          <th style="background:#1a1d27;color:#888;text-align:left;padding:7px 12px;border-bottom:2px solid #2a2d3a;">Match</th>
+        </tr>
+      </thead>
+      <tbody id="watch-tbody"></tbody>
+    </table>
+  </div>
 </div>
 
 <footer>
@@ -383,11 +440,15 @@
     const tbody = document.getElementById('table-body');
 
     if (sorted.length === 0) {
+      const pairsCount = lastData?.pairs_checked || 0;
+      const msg = pairsCount > 0
+        ? `Tracking ${pairsCount} matched pair${pairsCount === 1 ? '' : 's'} — no arbitrage exists right now. See Market Watch below for current prices.`
+        : `No market pairs matched between venues. Check that Kalshi and Polymarket are returning markets (see summary bar and any errors above).`;
       tbody.innerHTML = `
         <tr><td colspan="9">
           <div class="empty-state">
             <div class="icon">🔍</div>
-            <p>No arbitrage opportunities above your filters right now.</p>
+            <p>${msg}</p>
           </div>
         </td></tr>`;
       return;
@@ -426,6 +487,49 @@
       </tr>`;
     }).join('');
   }
+
+  function renderWatchPanel(pairs) {
+    const section = document.getElementById('watch-section');
+    if (!pairs || pairs.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    document.getElementById('watch-label').textContent =
+      `Market Watch — ${pairs.length} matched pair${pairs.length === 1 ? '' : 's'} (click to expand/collapse)`;
+
+    const tbody = document.getElementById('watch-tbody');
+    tbody.innerHTML = pairs.map(p => {
+      const netRaw = parseFloat(p.best_net_cost);
+      const netCents = isNaN(netRaw) ? '—' : (netRaw * 100).toFixed(1) + '¢';
+      const netClass = isNaN(netRaw) ? 'net-cost-far'
+        : netRaw < 0.99 ? 'net-cost-good'
+        : netRaw < 1.02 ? 'net-cost-near'
+        : 'net-cost-far';
+      return `<tr>
+        <td style="border-bottom:1px solid #1e212e;">${escapeHtml(p.kalshi_title)}</td>
+        <td style="border-bottom:1px solid #1e212e;">${escapeHtml(p.poly_title)}</td>
+        <td style="border-bottom:1px solid #1e212e;color:#555;">${p.sport ? formatSport(p.sport) : '—'}</td>
+        <td style="border-bottom:1px solid #1e212e;text-align:right;font-family:monospace;">${p.kalshi_yes_ask != null ? (parseFloat(p.kalshi_yes_ask)*100).toFixed(1)+'¢' : '—'}</td>
+        <td style="border-bottom:1px solid #1e212e;text-align:right;font-family:monospace;">${p.poly_yes_ask != null ? (parseFloat(p.poly_yes_ask)*100).toFixed(1)+'¢' : '—'}</td>
+        <td style="border-bottom:1px solid #1e212e;text-align:right;font-family:monospace;">${p.kalshi_no_ask != null ? (parseFloat(p.kalshi_no_ask)*100).toFixed(1)+'¢' : '—'}</td>
+        <td style="border-bottom:1px solid #1e212e;text-align:right;font-family:monospace;">${p.poly_no_ask != null ? (parseFloat(p.poly_no_ask)*100).toFixed(1)+'¢' : '—'}</td>
+        <td style="border-bottom:1px solid #1e212e;text-align:right;" class="${netClass}">${netCents}</td>
+        <td style="border-bottom:1px solid #1e212e;"><span class="match-badge">${escapeHtml(p.match_method)}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Toggle Market Watch section collapse
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('watch-toggle').addEventListener('click', () => {
+      const toggle = document.getElementById('watch-toggle');
+      const body = document.getElementById('watch-body');
+      const isCollapsed = toggle.classList.contains('collapsed');
+      toggle.classList.toggle('collapsed', !isCollapsed);
+      body.style.display = isCollapsed ? '' : 'none';
+    });
+  });
 
   function escapeHtml(str) {
     return String(str)
@@ -490,6 +594,7 @@
         populateSportFilter(data.opportunities);
         render(data.opportunities);
       }
+      renderWatchPanel(data.tracked_pairs || []);
 
     } catch (e) {
       showError(`Network error: ${e.message}`);

@@ -15,7 +15,7 @@ from arb_scanner.config import build_config, validate_kalshi_credentials
 from arb_scanner.fetchers.kalshi import KalshiFetcher
 from arb_scanner.fetchers.polymarket import PolymarketFetcher
 from arb_scanner.matcher import Matcher
-from arb_scanner.models import ScanResult
+from arb_scanner.models import ScanResult, TrackedPair
 
 log = structlog.get_logger()
 
@@ -68,6 +68,7 @@ async def _do_scan() -> ScanResult:
     start = time.monotonic()
     errors: list[str] = []
     opportunities = []
+    tracked_pairs: list[TrackedPair] = []
     pairs_checked = 0
 
     try:
@@ -117,8 +118,29 @@ async def _do_scan() -> ScanResult:
                 )
                 opportunities.extend(found)
 
+                # Record this pair in tracked_pairs regardless of arb
+                costs = []
+                for yes_ask, no_ask in [
+                    (kb.best_ask_yes, pb.best_ask_no),
+                    (pb.best_ask_yes, kb.best_ask_no),
+                ]:
+                    if yes_ask is not None and no_ask is not None:
+                        costs.append(yes_ask + no_ask)
+                tracked_pairs.append(TrackedPair(
+                    kalshi_title=pair.kalshi_market.title,
+                    poly_title=pair.polymarket_market.title,
+                    match_method=pair.match_method,
+                    sport=pair.kalshi_market.sport or pair.polymarket_market.sport,
+                    kalshi_yes_ask=kb.best_ask_yes,
+                    kalshi_no_ask=kb.best_ask_no,
+                    poly_yes_ask=pb.best_ask_yes,
+                    poly_no_ask=pb.best_ask_no,
+                    best_net_cost=min(costs) if costs else None,
+                ))
+
         opportunities.sort(key=lambda o: o.edge_pct, reverse=True)
 
+        tracked_pairs.sort(key=lambda p: p.best_net_cost or 999)
         scan_result = ScanResult(
             scanned_at=datetime.now(timezone.utc),
             opportunities=opportunities,
@@ -127,6 +149,7 @@ async def _do_scan() -> ScanResult:
             polymarket_markets=len(poly_markets),
             scan_duration_ms=(time.monotonic() - start) * 1000,
             errors=errors,
+            tracked_pairs=tracked_pairs,
         )
         log.info(
             "scan_complete",
