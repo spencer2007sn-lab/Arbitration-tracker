@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import re
 import time
@@ -161,13 +162,22 @@ class KalshiFetcher(BaseFetcher):
         cutoff = datetime.now(timezone.utc) + timedelta(hours=self._max_hours)
         markets: list[NormalizedMarket] = []
         cursor: Optional[str] = None
+        max_pages = 5  # cap to avoid 429 rate limits (~1000 markets max)
 
-        while True:
+        for page in range(max_pages):
             params: dict = {"status": "open", "limit": 200}
             if cursor:
                 params["cursor"] = cursor
 
-            data = await self._get("/markets", params)
+            try:
+                data = await self._get("/markets", params)
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    log.warning("kalshi_rate_limited", page=page,
+                                msg="Rate limited during pagination; returning partial results")
+                    break
+                raise
+
             raw_markets = data.get("markets", [])
 
             for m in raw_markets:
@@ -203,6 +213,7 @@ class KalshiFetcher(BaseFetcher):
             cursor = data.get("cursor")
             if not cursor or not raw_markets:
                 break
+            await asyncio.sleep(0.3)  # respect Kalshi rate limits between pages
 
         log.info("kalshi_markets_fetched", count=len(markets))
         return markets

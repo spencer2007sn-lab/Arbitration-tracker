@@ -87,20 +87,31 @@ class PolymarketFetcher(BaseFetcher):
 
     async def fetch_markets(self) -> list[NormalizedMarket]:
         cutoff = datetime.now(timezone.utc) + timedelta(hours=self._max_hours)
+        now = datetime.now(timezone.utc)
         markets: list[NormalizedMarket] = []
         offset = 0
         limit = 100
+        max_pages = 10  # Gamma API returns 422 beyond offset ~2100
 
-        while True:
+        for _ in range(max_pages):
             params = {
                 "active": "true",
                 "closed": "false",
                 "tag": "sports",
                 "limit": limit,
                 "offset": offset,
+                "end_date_min": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "end_date_max": cutoff.strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
-            r = await self._client.get(f"{self._gamma_url}/events", params=params)
-            r.raise_for_status()
+            try:
+                r = await self._client.get(f"{self._gamma_url}/events", params=params)
+                r.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 422:
+                    log.warning("polymarket_offset_limit", offset=offset,
+                                msg="Gamma API rejected offset; returning partial results")
+                    break
+                raise
             events: list[dict] = r.json()
 
             if not events:
