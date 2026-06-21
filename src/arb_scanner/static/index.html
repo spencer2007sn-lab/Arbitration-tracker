@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Prediction Market Arb Scanner</title>
+  <link rel="shortcut icon" href="data:,">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -59,6 +60,7 @@
     }
     .banner.error { background: #3b1a1a; color: #ff6b6b; border-bottom: 1px solid #5a2020; display: block; }
     .banner.stale { background: #3b2f10; color: #ffb74d; border-bottom: 1px solid #5a4210; display: block; }
+    .scan-error { padding: 4px 20px; font-size: 0.8rem; color: #ff6b6b; background: #2a1414; border-left: 3px solid #c0392b; margin: 1px 0; }
 
     .summary {
       padding: 10px 20px;
@@ -210,6 +212,7 @@
 </div>
 
 <div class="summary" id="summary">Initialising scanner…</div>
+<div id="scan-errors" style="display:none;"></div>
 
 <div class="filters">
   <label>Min edge %:
@@ -472,6 +475,14 @@
       document.getElementById('summary').textContent =
         `${data.pairs_checked} pairs checked in ${Math.round(data.scan_duration_ms)}ms` +
         (data.errors?.length ? ` · ⚠ ${data.errors.length} error(s)` : '');
+
+      const errBox = document.getElementById('scan-errors');
+      if (data.errors?.length) {
+        errBox.innerHTML = data.errors.map(e => `<div class="scan-error">⚠ ${escapeHtml(e)}</div>`).join('');
+        errBox.style.display = '';
+      } else {
+        errBox.style.display = 'none';
+      }
 
       if (data.opportunities) {
         populateSportFilter(data.opportunities);
