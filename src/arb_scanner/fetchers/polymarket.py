@@ -134,14 +134,20 @@ class PolymarketFetcher(BaseFetcher):
                     if len(clob_ids) < 2:
                         continue
 
-                    question = mkt.get("question", event.get("title", ""))
-                    team_a, team_b = _extract_teams(question)
+                    question = mkt.get("question", "")
+                    event_title = event.get("title", "")
+                    # Event title ("Manchester City vs Arsenal") has VS format → both teams.
+                    # Market question ("Will Manchester City win?") only gives team_a.
+                    team_a, team_b = _extract_teams(event_title)
+                    if not team_a:
+                        team_a, team_b = _extract_teams(question)
+                    title = question or event_title
 
                     markets.append(NormalizedMarket(
                         venue=Venue.POLYMARKET,
                         market_id=mkt["conditionId"],
-                        title=question,
-                        normalized_title=_normalize(question),
+                        title=title,
+                        normalized_title=_normalize(title),
                         sport=sport,
                         team_a=team_a,
                         team_b=team_b,

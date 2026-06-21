@@ -209,6 +209,65 @@ def test_resolution_warning_surfaced_in_pair():
     assert pairs[0].resolution_warning is not None
 
 
+# --- partial exact match ---
+
+def test_partial_exact_match_missing_team_b():
+    m = make_matcher()
+    # Kalshi has both teams; Polymarket only extracted team_a (from market question)
+    k = _km("K1", sport="soccer", team_a="manchester city", team_b="arsenal")
+    p = NormalizedMarket(
+        venue=Venue.POLYMARKET, market_id="P1",
+        title="Will Manchester City win?",
+        normalized_title=_normalize("Will Manchester City win?"),
+        sport="soccer", outcome_type="moneyline",
+        close_time=_close(), team_a="manchester city", team_b=None,
+        token_id_yes="t1", token_id_no="t2",
+    )
+    pairs = m.match([k], [p])
+    assert len(pairs) == 1
+    assert pairs[0].match_method == "partial_exact"
+
+
+def test_partial_exact_no_match_when_team_b_conflicts():
+    m = make_matcher()
+    k = _km("K1", sport="soccer", team_a="manchester city", team_b="arsenal")
+    p = NormalizedMarket(
+        venue=Venue.POLYMARKET, market_id="P1",
+        title="Will Manchester City win vs Chelsea?",
+        normalized_title=_normalize("Will Manchester City win vs Chelsea?"),
+        sport="soccer", outcome_type="moneyline",
+        close_time=_close(), team_a="manchester city", team_b="chelsea",
+        token_id_yes="t1", token_id_no="t2",
+    )
+    pairs = m.match([k], [p])
+    assert len(pairs) == 0
+
+
+# --- team fuzzy match ---
+
+def test_team_fuzzy_match_abbreviation():
+    m = make_matcher()
+    # "man city" is an abbreviation of "manchester city" — partial_ratio gives 100%
+    k = NormalizedMarket(
+        venue=Venue.KALSHI, market_id="K1",
+        title="Man City to win",
+        normalized_title=_normalize("Man City to win"),
+        sport="soccer", outcome_type="moneyline",
+        close_time=_close(), team_a="manchester city", team_b=None,
+    )
+    p = NormalizedMarket(
+        venue=Venue.POLYMARKET, market_id="P1",
+        title="Will Manchester City win?",
+        normalized_title=_normalize("Will Manchester City win?"),
+        sport="soccer", outcome_type="moneyline",
+        close_time=_close(), team_a="manchester city", team_b=None,
+        token_id_yes="t1", token_id_no="t2",
+    )
+    pairs = m.match([k], [p])
+    assert len(pairs) == 1
+    assert pairs[0].match_method in ("exact", "partial_exact", "fuzzy", "team_fuzzy")
+
+
 # --- no double matching ---
 
 def test_poly_market_not_matched_twice():

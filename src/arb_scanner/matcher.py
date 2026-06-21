@@ -162,6 +162,39 @@ class Matcher:
             if not matched:
                 still_unmatched_kalshi.append(k)
 
+        # --- 2b. Partial exact match (sport + team_a only, no team_b required) ---
+        partial_index: dict[tuple, list[NormalizedMarket]] = {}
+        for p in unmatched_poly:
+            if p.market_id in matched_poly_ids:
+                continue
+            if p.team_a and p.sport:
+                key = (p.sport, p.outcome_type, p.team_a)
+                partial_index.setdefault(key, []).append(p)
+
+        for k in list(still_unmatched_kalshi):
+            if not (k.team_a and k.sport):
+                continue
+            key = (k.sport, k.outcome_type, k.team_a)
+            if key not in partial_index:
+                continue
+            for p in partial_index[key]:
+                if p.market_id in matched_poly_ids:
+                    continue
+                # Skip if both sides have team_b but they differ
+                if k.team_b and p.team_b and k.team_b != p.team_b:
+                    continue
+                warning = _resolution_warning(k, p)
+                pairs.append(MarketPair(
+                    kalshi_market=k,
+                    polymarket_market=p,
+                    match_method="partial_exact",
+                    resolution_warning=warning,
+                ))
+                matched_poly_ids.add(p.market_id)
+                matched_kalshi_ids.add(k.market_id)
+                still_unmatched_kalshi.remove(k)
+                break
+
         # --- 3. Fuzzy title match ---
         remaining_poly = [p for p in unmatched_poly if p.market_id not in matched_poly_ids]
         poly_titles = {p.market_id: _normalize(p.title) for p in remaining_poly}
@@ -191,6 +224,9 @@ class Matcher:
                 continue
             _matched_title, score, poly_id = result
             p = poly_by_id_remaining[poly_id]
+            # Block fuzzy pair when both sides have extracted team_b but they differ
+            if k.team_b and p.team_b and k.team_b != p.team_b:
+                continue
             warning = _resolution_warning(k, p)
             pairs.append(MarketPair(
                 kalshi_market=k,
@@ -202,6 +238,44 @@ class Matcher:
             matched_poly_ids.add(poly_id)
             # Remove from candidates to prevent double-matching
             del poly_titles[poly_id]
+
+        # --- 4. Team-level fuzzy (handles abbreviations like "man city" → "manchester city") ---
+        remaining_poly_for_team = [p for p in poly_markets if p.market_id not in matched_poly_ids]
+
+        for k in [m for m in still_unmatched_kalshi if m.team_a]:
+            if k.market_id in matched_kalshi_ids:
+                continue
+            best_score = 0
+            best_p = None
+            for p in remaining_poly_for_team:
+                if p.market_id in matched_poly_ids or not p.team_a:
+                    continue
+                if k.sport and p.sport and k.sport != p.sport:
+                    continue
+                # Block when both sides have different team_b (different opponents)
+                if k.team_b and p.team_b and k.team_b != p.team_b:
+                    continue
+                # partial_ratio: "man city" scores 100% against "manchester city"
+                score_a = fuzz.partial_ratio(k.team_a, p.team_a)
+                score_b = fuzz.partial_ratio(k.team_b or "", p.team_a) if k.team_b else 0
+                score = max(score_a, score_b)
+                if score > best_score and score >= 80:
+                    best_score = score
+                    best_p = p
+            if best_p:
+                warning = _resolution_warning(k, best_p)
+                pairs.append(MarketPair(
+                    kalshi_market=k,
+                    polymarket_market=best_p,
+                    match_method="team_fuzzy",
+                    match_score=float(best_score),
+                    resolution_warning=warning,
+                ))
+                matched_poly_ids.add(best_p.market_id)
+                matched_kalshi_ids.add(k.market_id)
+                remaining_poly_for_team = [
+                    p for p in remaining_poly_for_team if p.market_id not in matched_poly_ids
+                ]
 
         log.info(
             "matcher_complete",
