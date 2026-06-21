@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -130,7 +131,15 @@ class PolymarketFetcher(BaseFetcher):
                 for mkt in event.get("markets", []):
                     if not mkt.get("active") or mkt.get("closed"):
                         continue
-                    clob_ids: list[str] = mkt.get("clobTokenIds", [])
+                    clob_ids_raw = mkt.get("clobTokenIds", [])
+                    # Gamma API returns clobTokenIds as a JSON-stringified array
+                    # e.g. "[\"123...\",\"456...\"]" rather than a parsed list.
+                    if isinstance(clob_ids_raw, str):
+                        try:
+                            clob_ids_raw = json.loads(clob_ids_raw)
+                        except (json.JSONDecodeError, ValueError):
+                            clob_ids_raw = []
+                    clob_ids: list[str] = clob_ids_raw
                     if len(clob_ids) < 2:
                         continue
 
