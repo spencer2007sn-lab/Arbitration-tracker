@@ -81,7 +81,8 @@ def test_normalize_strips_punctuation():
 
 
 def test_normalize_expands_vs():
-    assert _normalize("Team A vs Team B") == "team a versus team b"
+    # "vs" expands to "versus" then "versus" is stripped as noise; team names remain
+    assert _normalize("Team A vs Team B") == "team a team b"
 
 
 def test_normalize_collapses_whitespace():
@@ -110,8 +111,8 @@ def test_exact_no_match_different_sport():
 def test_exact_no_match_different_teams():
     m = make_matcher()
     pairs = m.match(
-        [_km("K1", team_a="team x", team_b="team y")],
-        [_pm("P1", team_a="team a", team_b="team b")],
+        [_km("K1", title="Kansas City Chiefs to win", team_a="kansas city chiefs", team_b=None)],
+        [_pm("P1", title="Will the Miami Heat win?", team_a="miami heat", team_b=None)],
     )
     assert len(pairs) == 0
 

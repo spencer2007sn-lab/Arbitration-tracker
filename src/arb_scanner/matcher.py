@@ -18,7 +18,24 @@ _ABBREV = [
     (r"\bfc\b", "football club"),
     (r"\butd\b", "united"),
     (r"\bman\b", "manchester"),
+    (r"\bla\b", "los angeles"),
+    (r"\bny\b", "new york"),
+    (r"\bkc\b", "kansas city"),
+    (r"\bsf\b", "san francisco"),
+    (r"\btb\b", "tampa bay"),
 ]
+
+# Words that carry no information about which teams/players are involved.
+# Deliberately excludes single letters (a, b, …) which appear in team names.
+_NOISE = re.compile(
+    r"\b(will|the|to|in|at|on|or|of|and|be|by|"
+    r"versus|"
+    r"win|wins|winning|won|beat|beats|beating|defeat|defeats|"
+    r"cover|covers|score|scores|reach|make|take|"
+    r"championship|title|finals|final|cup|series|"
+    r"game|match|season|playoffs|playoff|tournament|"
+    r"moneyline|ml|spread|total|over|under|ou)\b"
+)
 
 
 def _normalize(text: str) -> str:
@@ -26,6 +43,7 @@ def _normalize(text: str) -> str:
     t = re.sub(r"[^\w\s]", " ", t)
     for pattern, replacement in _ABBREV:
         t = re.sub(pattern, replacement, t)
+    t = _NOISE.sub(" ", t)
     return re.sub(r"\s+", " ", t).strip()
 
 
@@ -34,7 +52,7 @@ _RESOLUTION_KEYWORDS = {
     "extra_time": ["extra time", "overtime", "ot", "et", "incl ot", "incl et", "including ot"],
 }
 
-FUZZY_THRESHOLD = 85.0
+FUZZY_THRESHOLD = 75.0
 
 
 def _resolution_warning(kalshi: NormalizedMarket, poly: NormalizedMarket) -> Optional[str]:
@@ -146,12 +164,13 @@ class Matcher:
 
         # --- 3. Fuzzy title match ---
         remaining_poly = [p for p in unmatched_poly if p.market_id not in matched_poly_ids]
-        poly_titles = {p.market_id: p.normalized_title for p in remaining_poly}
+        poly_titles = {p.market_id: _normalize(p.title) for p in remaining_poly}
         poly_by_id_remaining = {p.market_id: p for p in remaining_poly}
 
         for k in still_unmatched_kalshi:
             if not poly_titles:
                 break
+            k_title = _normalize(k.title)
             # Build sport-filtered candidate set to prevent cross-sport false positives
             candidates = {
                 pid: title
@@ -163,9 +182,9 @@ class Matcher:
             if not candidates:
                 continue
             result = process.extractOne(
-                k.normalized_title,
+                k_title,
                 candidates,
-                scorer=fuzz.token_sort_ratio,
+                scorer=fuzz.token_set_ratio,
                 score_cutoff=self._fuzzy_threshold,
             )
             if result is None:
